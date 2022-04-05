@@ -5,3 +5,4 @@ torchvision
 tqdm
 pre-commit
 pytest
+flax
