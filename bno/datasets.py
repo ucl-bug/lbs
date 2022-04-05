@@ -13,7 +13,7 @@ class MNISTHelmholtz(Dataset):
     image_size: int = 128,
     pml_size: int = 32,
     sound_speed_lims: Tuple[float] = [1., 1.3],
-    source_pos: Tuple[float] = (96, 48),  # In pixels
+    source_pos: Tuple[float] = (96, 42),  # In pixels
     omega: float = 1.0,
     num_samples: int = 100,
     regenerate: bool = False,
@@ -49,7 +49,7 @@ class MNISTHelmholtz(Dataset):
     return f"data/{hashed_name}.npz"
 
   def __len__(self):
-    return len(self.data)
+    return len(self.fields)
 
   def __getitem__(self, idx):
     return {"field": self.fields[idx], "sound_speed": self.sound_speed[idx]}
@@ -132,7 +132,7 @@ class MNISTHelmholtz(Dataset):
 
     # Source field
     src_field = jnp.zeros(N).astype(jnp.complex64)
-    src_field = src_field.at[self.source_pos[0], self.source_pos[1]].set(1.0)
+    src_field = src_field.at[self.source_pos[0], self.source_pos[1]].set(20.0)
     src_field = smooth(src_field) + 0j
     src = FourierSeries(jnp.expand_dims(src_field,-1), domain)*self.omega
 
@@ -153,3 +153,9 @@ class MNISTHelmholtz(Dataset):
     # Saving the dataset
     print("Saving dataset")
     self.save()
+
+def collate_fn(batch):
+  return {
+    "field": jnp.stack([item["field"] for item in batch], axis=0),
+    "sound_speed": jnp.stack([item["sound_speed"] for item in batch], axis=0),
+  }

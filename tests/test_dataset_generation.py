@@ -8,7 +8,7 @@ def test_mnisthelmholtz_dataset():
     image_size=128,
     pml_size=32,
     sound_speed_lims=[1., 1.5],
-    source_pos=(96, 48),  # In pixels
+    source_pos=(96, 42),  # In pixels
     omega=1.0,
     num_samples=10,
     regenerate=True
@@ -20,17 +20,19 @@ def plot_mnisthelmholtz_dataset():
   dataset = MNISTHelmholtz(
     image_size=128,
     pml_size=32,
-    sound_speed_lims=[1., 1.5],
-    source_pos=(96, 48),  # In pixels
+    sound_speed_lims=[1., 2.],
+    source_pos=(96, 42),  # In pixels
     omega=1.0,
     num_samples=10,
     regenerate=False
   )
 
   fig, ax = plt.subplots(1, 2)
-  ax[0].imshow(dataset[5]['field'].real, vmin=-0.05, vmax=0.05, cmap="RdBu_r")
+  ax[0].imshow(dataset[5]['field'].real, vmin=-1., vmax=1., cmap="RdBu_r")
   ax[1].imshow(dataset[5]['sound_speed'], cmap="inferno")
-  plt.show()
+
+  # Save the figure
+  fig.savefig("data/mnisthelmholtz.png")
 
 
 if __name__ == "__main__":

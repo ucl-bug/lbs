@@ -22,7 +22,7 @@ class ProjectBack(nn.Module):
     @nn.compact
     def __call__(self, x):
         x = nn.Dense(self.internal_channels)(x)
-        x = nn.gelu(x)
+        x = self.activation(x)
         x = nn.Dense(self.out_channels)(x)
         return x
 
@@ -37,7 +37,7 @@ class FourierStage(nn.Module):
         # kernel -> [in_channels, out_channels, kmax, kmax]
         kernel = self.param(
             'kernel',
-            normal(self.channels, jnp.complex64),
+            normal(1/self.channels, jnp.complex64),
             (x.shape[-1], self.channels, self.kmax, self.kmax),
             jnp.complex64
         )
@@ -69,7 +69,7 @@ class FourierStage(nn.Module):
         return y
 
 class FNO(nn.Module):
-    stages: int = 4
+    stages: int = 6
     channels: int = 32
     kmax: int = 16
 

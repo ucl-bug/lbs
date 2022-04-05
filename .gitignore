@@ -6,3 +6,7 @@
 data/*.npz
 data/**/*.gz
 data/**/*ubyte
+data/*.png
+
+# Logging
+wandb

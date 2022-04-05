@@ -11,5 +11,8 @@ def test_fno():
     print(output.shape)
     print(output.dtype)
 
+    # Test forward pass
+    output = FNO().apply(variables, inputs)
+
 if __name__ == "__main__":
     test_fno()
