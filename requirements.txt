@@ -2,3 +2,6 @@ jwave
 jupyterlab
 matplotlib
 torchvision
+tqdm
+pre-commit
+pytest

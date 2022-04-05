@@ -19,6 +19,11 @@ clean:             ## Clean unused files.
 	@rm -rf .tox/
 	@rm -rf docs/_build
 
+.PHONY: generate_datasets
+generate_datasets:
+	@echo "--- Generating datasets ---"
+	@$(ENV_PREFIX)python experiments/generate_datasets.py
+
 
 .PHONY: install     ## Install the package in the current environment
 install:
@@ -27,8 +32,8 @@ install:
 	@pip install .
 
 
-.PHONY: install-dev  ## Install the package in editable mode
-install-dev:
+.PHONY: install_dev  ## Install the package in editable mode
+install_dev:
 	@echo "Installing bno in editable mode"
 	@echo "--- Warning: make sure that you've activated the virtual environment before running this command ---"
 	@pip install -e .
@@ -59,4 +64,11 @@ virtualenv:          ## Create a virtual environment. Checks that python > 3.8
 	@echo "Installing bno"
 	@./.venv/bin/pip  install -e .
 
+	@echo "Installing pre-commit"
+	@$(ENV_PREFIX)pre-commit install
+
 	@echo "!!! Please run 'source .venv/bin/activate' to enable the environment before using BNO!!!"
+
+.PHONY: test
+test:             ## Run tests with pytest (discover mode)
+	$(ENV_PREFIX)pytest
