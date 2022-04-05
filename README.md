@@ -4,6 +4,13 @@
 
 ---
 
+## Steps
+
+### Install
+Run `make virtualenv` and then `source .venv/bin/activate` to activate the virtual environment.
+
+### Generate datasets
+Run `make generate_datasets` to generate the datasets.
 
 ## References
 
