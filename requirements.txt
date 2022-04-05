@@ -1,0 +1,4 @@
+jwave
+jupyterlab
+matplotlib
+torchvision
