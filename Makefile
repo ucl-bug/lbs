@@ -59,7 +59,9 @@ virtualenv:          ## Create a virtual environment. Checks that python > 3.8
 
 	@echo "Instaling JaxDF and jwave"
 	@./.venv/bin/pip install git+https://github.com/ucl-bug/jaxdf.git
-	@./.venv/bin/pip install git+https://github.com/ucl-bug/jwave.git
+	@mkdir .venv/raw
+	@git clone git@github.com:ucl-bug/jwave.git .venv/raw/jwave
+	@./.venv/bin/pip install .venv/raw/jwave
 
 	@echo "Installing bno"
 	@./.venv/bin/pip  install -e .
