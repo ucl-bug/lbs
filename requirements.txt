@@ -6,5 +6,6 @@ tqdm
 pre-commit
 pytest
 flax
-wandb
 optax
+git+https://github.com/astanziola/fourier-neural-operator-flax.git # FNO in flax
+neptune-client

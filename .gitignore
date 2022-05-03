@@ -10,3 +10,7 @@ data/*.png
 
 # Logging
 wandb
+.neptune
+
+# Private
+secrets.json

@@ -19,17 +19,18 @@ def cbs_pml(
   medium = Medium(domain = field.domain, pml_size=pml_size)
   N = 4
 
+  a_ref = 1.0
   def num(x):
-    return (alpha**2)*(N - alpha*x + 2j*k0*x)*((alpha*x)**(N-1))
+    return (a_ref**2)*(N - a_ref*x + 2j*k0*x)*((a_ref*x)**(N-1))
 
   def den(x):
-    return sum([((alpha*x)**i)/float(factorial(i)) for i in range(N)])*factorial(N)
+    return sum([((a_ref*x)**i)/float(factorial(i)) for i in range(N)])*factorial(N)
 
   def transform_fun(x):
     x = x
     return num(x)/den(x)
 
-  k_k0 = _base_pml(transform_fun, medium, exponent=1.0, alpha_max=2.)
+  k_k0 = _base_pml(transform_fun, medium, exponent=1.0, alpha_max=alpha)
   k_k0 = jnp.expand_dims(jnp.sum(k_k0, -1), -1)
   return k_k0 + k0**2
 
@@ -59,6 +60,7 @@ def born_solver(
   max_iter: object = 1000,
   tol: object = 1e-6,
   alpha: object = 1.0,
+  gt = None,
   params = None
 ) -> FourierSeries:
 
@@ -66,26 +68,20 @@ def born_solver(
     params = params
 
   def pad_fun(u):
-    new_N = tuple([x+(pml_size*2*src.domain.dx[0]) for x in src.domain.N])
+    new_N = tuple([x+int(pml_size*2*src.domain.dx[0]) for x in src.domain.N])
     return FourierSeries(
       jnp.pad(u.on_grid, ((pml_size,pml_size), (pml_size,pml_size), (0,0))),
       Domain(new_N, src.domain.dx)
     )
 
   src = pad_fun(src)
-
   k_sq = cbs_pml(src, k0, pml_size, alpha)
   k_sq = k_sq.at[pml_size:-pml_size,pml_size:-pml_size].set(
     ((omega/sound_speed)**2).on_grid + 0j
   )
   k_sq = FourierSeries(k_sq, src.domain)
-  plt.imshow(jnp.abs(k_sq.on_grid))
-  plt.colorbar()
-  plt.savefig('k_sq.png')
-  plt.close()
 
   epsilon = jnp.amax(jnp.abs((k_sq.on_grid - k0**2)))
-  print(epsilon)
 
   norm_initial = jnp.linalg.norm(src.on_grid)
 
@@ -95,12 +91,23 @@ def born_solver(
   def resid_fun(field):
     return cbs_helmholtz(field, k_sq) + src
 
-  def cond_fun(carry):
-    numiter, field = carry
-    field = FourierSeries(field, src.domain)
-    cond_1 = numiter < max_iter
-    cond_2 = jnp.linalg.norm(resid_fun(field).on_grid) / norm_initial > tol
-    return cond_1*cond_2
+  if gt is None:
+    def cond_fun(carry):
+      numiter, field = carry
+      field = FourierSeries(field, src.domain)
+      cond_1 = numiter < max_iter
+      cond_2 = jnp.linalg.norm(resid_fun(field).on_grid) / norm_initial > tol
+      return cond_1*cond_2
+  else:
+    gt_norm = jnp.linalg.norm(gt.on_grid)
+    def cond_fun(carry):
+      numiter, field = carry
+      field = FourierSeries(field, src.domain)
+      cond_1 = numiter < max_iter
+      cond_2 = jnp.linalg.norm(
+          field.on_grid[pml_size:-pml_size,pml_size:-pml_size,:] - gt.on_grid
+        )/gt_norm > tol
+      return cond_1*cond_2
 
   def body_fun(carry):
     numiter, field = carry
@@ -111,7 +118,7 @@ def born_solver(
   _, out_field = while_loop(cond_fun, body_fun, carry)
 
   # unpad
-  out_field = out_field # [pml_size:-pml_size,pml_size:-pml_size,:]
+  out_field = out_field[pml_size:-pml_size,pml_size:-pml_size,:]
   return jnp.sum(out_field, axis=-1), k_sq.on_grid
 
 def born_iteration(
