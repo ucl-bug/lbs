@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 import wandb
 from bno.datasets import MNISTHelmholtz, collate_fn
-from bno.models import WrappedBNO, WrappedFNO
+from bno.models import WrappedBNO, WrappedComplexBNO, WrappedFNO
 
 RNG = random.PRNGKey(0)
 
@@ -43,7 +43,7 @@ def log_wandb_image(wandb, name, step, sos, field, pred_field):
 def main(args):
   # Check arguments
   assert args.max_sos > 1.0, "max_sos must be greater than 1.0"
-  assert args.model in ["fno", "bno"], "model must be 'fno'"
+  assert args.model in ["fno", "bno", 'cbno'], "model must be 'fno'"
   assert args.batch_size > 0, "batch_size must be greater than 0"
   assert args.stages > 0, "stages must be greater than 0"
   assert args.channels > 0, "channels must be greater than 0"
@@ -61,7 +61,7 @@ def main(args):
     pml_size=16,
     sound_speed_lims=[1., args.max_sos],
     source_pos=(8+16, 8+16),  # In pixels
-    omega=1.0,
+    omega=0.5,
     num_samples=1500,
     regenerate=False,
     dtype=args.target,
@@ -97,6 +97,12 @@ def main(args):
     )
   elif args.model == "bno":
     model = WrappedBNO(
+      stages=args.stages,
+      channels=args.channels,
+      dtype= args.target
+    )
+  elif args.model == "cbno":
+    model = WrappedComplexBNO(
       stages=args.stages,
       channels=args.channels,
       dtype= args.target
@@ -151,8 +157,6 @@ def main(args):
   # Training loop
   step = 0
   for epoch in range(args.epochs):
-    print(f"Epoch {epoch}")
-
     with tqdm(trainloader, unit="batch") as tepoch:
       for batch in tepoch:
         tepoch.set_description(f"Epoch {epoch}")
