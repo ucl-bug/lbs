@@ -1,4 +1,5 @@
 import argparse
+from functools import partial
 
 import optax
 from jax import jit
@@ -110,13 +111,15 @@ def main(args):
   elif args.model == "ubs":
     model = WrappedUBS(
       stages=args.stages,
-      dtype= args.target
+      dtype= args.target,
     )
 
   _sos = jnp.ones((1, dataset.image_size, dataset.image_size, 1))
   _pml = jnp.ones((1, dataset.image_size, dataset.image_size, 4))
   _src = jnp.ones((1, dataset.image_size, dataset.image_size, 1))
-  output, model_params = model.init_with_output(RNG, _sos, _pml, _src)
+  output, model_params = model.init_with_output(
+    RNG, _sos, _pml, _src, unrolls=args.stages
+  )
   del _sos
   del _pml
   del _src
@@ -126,28 +129,29 @@ def main(args):
   opt_state = optimizer.init(model_params)
 
   # Define loss
-  @jit
-  def loss(model_params, sound_speed, field, pml, src):
+  @partial(jit, static_argnums=5)
+  def loss(model_params, sound_speed, field, pml, src, unrolls):
     # Predict fields
-    pred_field = model.apply(model_params, sound_speed, pml, src)
+    pred_field = model.apply(model_params, sound_speed, pml, src, unrolls)
 
     # Compute loss
     lossval = jnp.mean(jnp.abs(pred_field - field)**2)
     return lossval
 
-  @jit
-  def predict(model_params, sound_speed, pml, src):
-    return model.apply(model_params, sound_speed, pml, src)
+  @partial(jit, static_argnums=4)
+  def predict(model_params, sound_speed, pml, src, unrolls):
+    return model.apply(model_params, sound_speed, pml, src, unrolls)
 
-  @jit
-  def update(opt_state, params, batch):
+  @partial(jit, static_argnums=3)
+  def update(opt_state, params, batch, unrolls):
     # Get loss and gradients
     lossval, gradients = value_and_grad(loss)(
       params,
       batch["sound_speed"],
       batch["field"],
       batch["pml"],
-      batch["source"]
+      batch["source"],
+      unrolls
     )
 
     updates, opt_state = optimizer.update(gradients, opt_state, params)
@@ -162,13 +166,16 @@ def main(args):
   # Training loop
   step = 0
   for epoch in range(args.epochs):
+    unrolls = 1 + int(epoch / 30)
+    print(f"Epoch {epoch}, unrolls {unrolls}")
+
     with tqdm(trainloader, unit="batch") as tepoch:
       for batch in tepoch:
         tepoch.set_description(f"Epoch {epoch}")
 
         # Update parameters
         model_params, opt_state, lossval = update(
-          opt_state, model_params, batch
+          opt_state, model_params, batch, unrolls
         )
 
         # Log to wandb
@@ -186,7 +193,7 @@ def main(args):
     src = jnp.expand_dims(batch["source"][0], axis=0)
     field = batch["field"][0]
 
-    pred_field = predict(model_params, sos, pml, src)[0]
+    pred_field = predict(model_params, sos, pml, src, unrolls)[0]
     sos = sos[0]
     log_wandb_image(wandb, "training", step, sos, field, pred_field)
 
@@ -202,7 +209,8 @@ def main(args):
           batch["sound_speed"],
           batch["field"],
           batch["pml"],
-          batch["source"]
+          batch["source"],
+          unrolls
         )
         avg_loss += lossval*len(batch["sound_speed"])
         tval.set_postfix(loss=lossval)
@@ -215,7 +223,7 @@ def main(args):
     pml = jnp.expand_dims(batch["pml"][0], axis=0)
     src = jnp.expand_dims(batch["source"][0], axis=0)
     field = batch["field"][0]
-    pred_field = predict(model_params, sos, pml, src)[0]
+    pred_field = predict(model_params, sos, pml, src, unrolls)[0]
     sos = sos[0]
     log_wandb_image(wandb, "validation", step, sos, field, pred_field)
 

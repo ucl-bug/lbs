@@ -12,7 +12,7 @@ class UnrolledBorn(nn.Module):
   padding: int = 32
 
   @nn.compact
-  def __call__(self, k_sq, src):
+  def __call__(self, k_sq, src, unrolls):
     # Pad fields to accomodate pml
     k_sq = pad_constant(k_sq, self.padding, jnp.min(k_sq), 'symmetric')
     src = pad_constant(src, self.padding, 0.0, 'symmetric')
@@ -31,7 +31,8 @@ class UnrolledBorn(nn.Module):
     u0 = jnp.repeat(u0, src.shape[0], axis=0) # Batching initial field
 
     # Apply Born-like stages
-    for i in range(self.stages):
+    unrolls = min([unrolls, self.stages])
+    for i in range(unrolls):
       u0 = BornStage(self.project_inner_ch)(all_ins, u0)
 
     # Remove padding

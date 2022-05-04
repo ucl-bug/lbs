@@ -47,14 +47,14 @@ class WrappedUBS(nn.Module):
   dtype: jnp.dtype = jnp.complex64
 
   @nn.compact
-  def __call__(self, sos, pml, src):
+  def __call__(self, sos, pml, src, unrolls):
     k_sq = (1/sos)**2
 
     y = UnrolledBorn(
       stages=self.stages,
       project_inner_ch=self.project_inner_ch,
       padding=self.padding,
-    )(k_sq, src)
+    )(k_sq, src, unrolls)
 
     if self.dtype == jnp.complex64:
       return y
