@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 import wandb
 from bno.datasets import MNISTHelmholtz, collate_fn
-from bno.models import WrappedBNO, WrappedComplexBNO, WrappedFNO
+from bno.modules import WrappedBNO, WrappedComplexBNO, WrappedFNO, WrappedUBS
 
 RNG = random.PRNGKey(0)
 
@@ -43,7 +43,7 @@ def log_wandb_image(wandb, name, step, sos, field, pred_field):
 def main(args):
   # Check arguments
   assert args.max_sos > 1.0, "max_sos must be greater than 1.0"
-  assert args.model in ["fno", "bno", 'cbno'], "model must be 'fno'"
+  assert args.model in ["fno", "bno", 'cbno', 'ubs'], "model must be 'fno'"
   assert args.batch_size > 0, "batch_size must be greater than 0"
   assert args.stages > 0, "stages must be greater than 0"
   assert args.channels > 0, "channels must be greater than 0"
@@ -105,6 +105,11 @@ def main(args):
     model = WrappedComplexBNO(
       stages=args.stages,
       channels=args.channels,
+      dtype= args.target
+    )
+  elif args.model == "ubs":
+    model = WrappedUBS(
+      stages=args.stages,
       dtype= args.target
     )
 
@@ -219,7 +224,7 @@ if __name__ == '__main__':
   # Parse arguments
   arg_parser = argparse.ArgumentParser()
   arg_parser.add_argument('--max_sos', type=float, default=2.0)
-  arg_parser.add_argument('--model', type=str, default='fno')
+  arg_parser.add_argument('--model', type=str, default='ubs')
   arg_parser.add_argument('--batch_size', type=int, default=16)
   arg_parser.add_argument('--epochs', type=int, default=1000)
   arg_parser.add_argument('--lr', type=float, default=1e-4)
