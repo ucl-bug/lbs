@@ -8,7 +8,7 @@ from .utils import CProject, constant, pad_constant, unpad
 
 class UnrolledBorn(nn.Module):
   stages: int = 12
-  project_inner_ch: int = 16
+  project_inner_ch: int = 32
   padding: int = 32
 
   @nn.compact
@@ -50,7 +50,7 @@ class UnrolledBorn(nn.Module):
     return batched_grid
 
 class BornStage(nn.Module):
-  project_inner_ch: int = 16
+  project_inner_ch: int = 32
 
   @nn.compact
   def __call__(self, all_ins, uk):
@@ -78,19 +78,21 @@ class TunableGreens(nn.Module):
       # Stage params
       k0 = self.param('k0', constant(1., jnp.float32), (1,), jnp.float32)[0]
       epsilon = self.param('epsilon', constant(1., jnp.float32), (1,), jnp.float32)[0]
+      freq_scale = self.param('freq_scale', constant(1., jnp.float32), (1,), jnp.float32)[0]
 
       # Keep them positive
-      k0 = k0**2
-      epsilon = epsilon**2
+      k0 = nn.softplus(k0)
+      epsilon = nn.softplus(epsilon)
+      freq_scale = nn.softplus(freq_scale)
 
       # Get frequency axis squared
       _params = jnp.zeros(list(u.shape[1:3]) + [1,]) + 0j
       field = FourierSeries(_params, Domain(u.shape[1:3], (1,1)))
       freq_grid = field._freq_grid
-      p_sq = jnp.sum(freq_grid**2, -1)
+      p_sq = jnp.sum(freq_grid**2, -1)*freq_scale
 
       # Apply green's function
-      g_fourier = jnp.expand_dims(1.0 / (p_sq - k0 - 1j*epsilon), 0)
+      g_fourier = jnp.expand_dims(1.0 / (p_sq - k0 - 1j*(1e-4 + epsilon)), 0)
       u = u[...,0]
       u_fft = jnp.fft.fftn(u, axes=(1,2))
       Gu_fft = g_fourier * u_fft

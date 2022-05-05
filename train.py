@@ -62,7 +62,7 @@ def main(args):
     pml_size=16,
     sound_speed_lims=[1., args.max_sos],
     source_pos=(8+16, 8+16),  # In pixels
-    omega=0.5,
+    omega=1.0,
     num_samples=1500,
     regenerate=False,
     dtype=args.target,
@@ -165,9 +165,15 @@ def main(args):
 
   # Training loop
   step = 0
+  old_loss = 1e20
+  #  Take a checkpoint of the model params
+  params_ckpt = [model_params.copy({}), model_params.copy({})]
+  optstate_ckpt = [opt_state, opt_state]
+
   for epoch in range(args.epochs):
     unrolls = 1 + int(epoch / 30)
     print(f"Epoch {epoch}, unrolls {unrolls}")
+
 
     with tqdm(trainloader, unit="batch") as tepoch:
       for batch in tepoch:
@@ -177,6 +183,16 @@ def main(args):
         model_params, opt_state, lossval = update(
           opt_state, model_params, batch, unrolls
         )
+
+        # Check if loss exploded, in which case we restore the model params
+        if lossval > 10*old_loss:
+          print("Training exploded, restoring model params of previous 5 steps")
+          model_params = params_ckpt[0]
+          opt_state = optstate_ckpt[0]
+        elif step % 50 == 0:
+          old_loss = lossval
+          params_ckpt = [params_ckpt[1]] + [model_params.copy({})]
+          optstate_ckpt = [optstate_ckpt[1]] + [opt_state]
 
         # Log to wandb
         wandb.log({"loss": lossval}, step=step)

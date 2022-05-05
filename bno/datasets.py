@@ -148,7 +148,7 @@ class MNISTHelmholtz(Dataset):
 
     # Source field
     src_field = jnp.zeros(N).astype(jnp.complex64)
-    src_field = src_field.at[self.source_pos[0], self.source_pos[1]].set(20.0)
+    src_field = src_field.at[self.source_pos[0], self.source_pos[1]].set(100.0)
     src_field = smooth(src_field) + 0j
     src = FourierSeries(jnp.expand_dims(src_field,-1), domain)*self.omega
     self.source = src.on_grid
