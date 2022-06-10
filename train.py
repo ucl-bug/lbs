@@ -30,10 +30,10 @@ def log_wandb_image(wandb, name, step, sos, field, pred_field):
   ax[0].imshow(sos, cmap="inferno")
   ax[0].set_title("Sound speed")
 
-  ax[1].imshow(field.real, vmin=-5, vmax=5, cmap="RdBu_r")
+  ax[1].imshow(field.real, vmin=-.5, vmax=.5, cmap="RdBu_r")
   ax[1].set_title("Field")
 
-  ax[2].imshow(pred_field.real, vmin=-5, vmax=5, cmap="RdBu_r")
+  ax[2].imshow(pred_field.real, vmin=-.5, vmax=.5, cmap="RdBu_r")
   ax[2].set_title("Predicted field")
 
   #plt.show()
@@ -172,7 +172,11 @@ def main(args):
   del _src
 
   # Initialize optimizer
-  optimizer = optax.adamw(learning_rate=args.lr)
+
+  optimizer = optax.chain(
+    optax.adaptive_grad_clip(1.0),
+    optax.adamw(learning_rate=args.lr),
+  )
   opt_state = optimizer.init(model_params)
 
   # Define loss
