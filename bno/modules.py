@@ -4,7 +4,7 @@ from fno import FNO2D
 from jax import numpy as jnp
 
 from .models.bno import BNO
-from .models.born_unroll import UnrolledBorn
+from .models.born_unroll_base import UnrolledBornBase
 from .models.cbno import CBNO
 
 
@@ -46,20 +46,32 @@ class WrappedUBS(nn.Module):
   padding: int = 32
   dtype: jnp.dtype = jnp.complex64
 
-  @nn.compact
-  def __call__(self, sos, pml, src, unrolls):
-    k_sq = (1/sos)**2
-
-    y = UnrolledBorn(
+  def setup(self):
+    self.UB = UnrolledBornBase(
       stages=self.stages,
       project_inner_ch=self.project_inner_ch,
       padding=self.padding,
-    )(k_sq, src, unrolls)
+    )
+
+  def __call__(self, sos, pml, src, unrolls):
+    k_sq = (1/sos)**2
+
+    y = self.UB(k_sq, src, unrolls)
 
     if self.dtype == jnp.complex64:
       return y
     else:
       return jnp.abs(y)
+
+  def apply_with_intermediate(self, sos, pml, src, unrolls):
+    k_sq = (1/sos)**2
+
+    y, _intermediate = self.UB.run_with_intermediate(k_sq, src, unrolls)
+
+    if self.dtype == jnp.complex64:
+      return y, _intermediate
+    else:
+      return jnp.abs(y), _intermediate
 
 
 class WrappedComplexBNO(nn.Module):

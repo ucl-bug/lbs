@@ -1,6 +1,8 @@
 import argparse
 from functools import partial
 
+import flax.linen as nn
+import numpy as np
 import optax
 from jax import jit
 from jax import numpy as jnp
@@ -28,16 +30,61 @@ def log_wandb_image(wandb, name, step, sos, field, pred_field):
   ax[0].imshow(sos, cmap="inferno")
   ax[0].set_title("Sound speed")
 
-  ax[1].imshow(field.real, vmin=-1, vmax=1, cmap="RdBu_r")
+  ax[1].imshow(field.real, vmin=-5, vmax=5, cmap="RdBu_r")
   ax[1].set_title("Field")
 
-  ax[2].imshow(pred_field.real, vmin=-1, vmax=1, cmap="RdBu_r")
+  ax[2].imshow(pred_field.real, vmin=-5, vmax=5, cmap="RdBu_r")
   ax[2].set_title("Predicted field")
 
   #plt.show()
 
   img = wandb.Image(plt)
   wandb.log({name: img}, step=step)
+  plt.close()
+
+def log_with_intermediates(wandb, step, sos, field, pred_field, intermediates):
+  # Extracting intermediates
+  fields = [x[0] for x in intermediates['fields']]
+  M1 = [x['M1'][0] for x in intermediates['operators']]
+  M2 = [x['M2'][0] for x in intermediates['operators']]
+  src = [x['src'][0] for x in intermediates['operators']]
+  updates = [x[0] for x in intermediates['updates']]
+  num_figures = max([2, len(fields)])
+
+  # Log in rows
+  fig, ax = plt.subplots(num_figures, 9, figsize=(24, num_figures*3))
+  for i in range(len(fields)):
+    maxval = np.amax(jnp.abs(fields[i])).item()
+    ax[i, 0].imshow(fields[i].real, vmin=-maxval/2, vmax=maxval/2, cmap="seismic")
+    ax[i, 0].set_title("Field (real)")
+    ax[i, 1].imshow(fields[i].imag, vmin=-maxval/2, vmax=maxval/2, cmap="seismic")
+    ax[i, 1].set_title("Field (imag)")
+
+    if i < len(M1):
+      maxval = np.amax(jnp.abs(M1[i])).item()
+      ax[i, 2].imshow(M1[i].real, vmin=-maxval, vmax=maxval, cmap="seismic")
+      ax[i, 2].set_title("M1 (real)")
+      ax[i, 3].imshow(M1[i].imag, vmin=-maxval, vmax=maxval, cmap="seismic")
+      ax[i, 3].set_title("M1 (imag)")
+
+      maxval = np.amax(jnp.abs(M2[i])).item()
+      ax[i, 4].imshow(M2[i].real, vmin=-maxval, vmax=maxval, cmap="seismic")
+      ax[i, 4].set_title("M2 (real)")
+      ax[i, 5].imshow(M2[i].imag, vmin=-maxval, vmax=maxval, cmap="seismic")
+      ax[i, 5].set_title("M2 (imag)")
+
+      maxval = np.amax(jnp.abs(src[i])).item()
+      ax[i, 6].imshow(src[i].real, vmin=-maxval, vmax=maxval, cmap="seismic")
+      ax[i, 6].set_title("Src (real)")
+      ax[i, 7].imshow(src[i].imag, vmin=-maxval, vmax=maxval, cmap="seismic")
+      ax[i, 7].set_title("Src (imag)")
+
+    maxval = np.amax(jnp.abs(updates[i])).item()
+    ax[i, 8].imshow(jnp.abs(updates[i]), vmin=-0, vmax=maxval, cmap="inferno")
+    ax[i, 8].set_title("Update magnitude (& next field)")
+
+  img = wandb.Image(plt)
+  wandb.log({"intermediates": img}, step=step)
   plt.close()
 
 
@@ -117,7 +164,7 @@ def main(args):
   _sos = jnp.ones((1, dataset.image_size, dataset.image_size, 1))
   _pml = jnp.ones((1, dataset.image_size, dataset.image_size, 4))
   _src = jnp.ones((1, dataset.image_size, dataset.image_size, 1))
-  output, model_params = model.init_with_output(
+  model_params = model.init(
     RNG, _sos, _pml, _src, unrolls=args.stages
   )
   del _sos
@@ -141,6 +188,12 @@ def main(args):
   @partial(jit, static_argnums=4)
   def predict(model_params, sound_speed, pml, src, unrolls):
     return model.apply(model_params, sound_speed, pml, src, unrolls)
+
+  @partial(jit, static_argnums=4)
+  def predict_with_intermediate(model_params, sound_speed, pml, src, unrolls):
+    def _fun(model):
+      return model.apply_with_intermediate(sound_speed, pml, src, unrolls)
+    return nn.apply(_fun, model)(model_params)
 
   @partial(jit, static_argnums=3)
   def update(opt_state, params, batch, unrolls):
@@ -171,7 +224,7 @@ def main(args):
   optstate_ckpt = [opt_state, opt_state]
 
   for epoch in range(args.epochs):
-    unrolls = 1 + int(epoch / 30)
+    unrolls = args.stages  # 1 + int(epoch / 30)
     print(f"Epoch {epoch}, unrolls {unrolls}")
 
 
@@ -185,14 +238,14 @@ def main(args):
         )
 
         # Check if loss exploded, in which case we restore the model params
-        if lossval > 10*old_loss:
-          print("Training exploded, restoring model params of previous 5 steps")
-          model_params = params_ckpt[0]
-          opt_state = optstate_ckpt[0]
-        elif step % 50 == 0:
-          old_loss = lossval
-          params_ckpt = [params_ckpt[1]] + [model_params.copy({})]
-          optstate_ckpt = [optstate_ckpt[1]] + [opt_state]
+        #if lossval > 10*old_loss:
+        #  print("Training exploded, restoring model params of previous 5 steps")
+        #  model_params = params_ckpt[0]
+        #  opt_state = optstate_ckpt[0]
+        #elif step % 50 == 0:
+        #  old_loss = lossval
+        #  params_ckpt = [params_ckpt[1]] + [model_params.copy({})]
+        #  optstate_ckpt = [optstate_ckpt[1]] + [opt_state]
 
         # Log to wandb
         wandb.log({"loss": lossval}, step=step)
@@ -204,14 +257,19 @@ def main(args):
         step += 1
 
     # Log training image
-    sos = jnp.expand_dims(batch["sound_speed"][0], axis=0)
-    pml = jnp.expand_dims(batch["pml"][0], axis=0)
-    src = jnp.expand_dims(batch["source"][0], axis=0)
-    field = batch["field"][0]
+    if epoch % 5 == 0:
+      sos = jnp.expand_dims(batch["sound_speed"][0], axis=0)
+      pml = jnp.expand_dims(batch["pml"][0], axis=0)
+      src = jnp.expand_dims(batch["source"][0], axis=0)
+      field = batch["field"][0]
 
-    pred_field = predict(model_params, sos, pml, src, unrolls)[0]
-    sos = sos[0]
-    log_wandb_image(wandb, "training", step, sos, field, pred_field)
+      pred_fields, intermediates = predict_with_intermediate(model_params, sos, pml, src, unrolls)
+      pred_field = pred_fields[0]
+      sos = sos[0]
+
+      log_with_intermediates(
+        wandb, step, sos, field, pred_field, intermediates)
+      log_wandb_image(wandb, "training", step, sos, field, pred_field)
 
     # Validation
     avg_loss = 0
@@ -235,13 +293,14 @@ def main(args):
     wandb.log({"val_loss": avg_loss/val_steps}, step=step)
 
     # Log validation image
-    sos = jnp.expand_dims(batch["sound_speed"][0], axis=0)
-    pml = jnp.expand_dims(batch["pml"][0], axis=0)
-    src = jnp.expand_dims(batch["source"][0], axis=0)
-    field = batch["field"][0]
-    pred_field = predict(model_params, sos, pml, src, unrolls)[0]
-    sos = sos[0]
-    log_wandb_image(wandb, "validation", step, sos, field, pred_field)
+    if epoch % 5 == 0:
+      sos = jnp.expand_dims(batch["sound_speed"][0], axis=0)
+      pml = jnp.expand_dims(batch["pml"][0], axis=0)
+      src = jnp.expand_dims(batch["source"][0], axis=0)
+      field = batch["field"][0]
+      pred_field = predict(model_params, sos, pml, src, unrolls)[0]
+      sos = sos[0]
+      log_wandb_image(wandb, "validation", step, sos, field, pred_field)
 
 
 if __name__ == '__main__':
@@ -251,7 +310,7 @@ if __name__ == '__main__':
   arg_parser.add_argument('--model', type=str, default='ubs')
   arg_parser.add_argument('--batch_size', type=int, default=16)
   arg_parser.add_argument('--epochs', type=int, default=1000)
-  arg_parser.add_argument('--lr', type=float, default=1e-4)
+  arg_parser.add_argument('--lr', type=float, default=1e-3)
   arg_parser.add_argument('--stages', type=int, default=6)
   arg_parser.add_argument('--channels', type=int, default=32)
   arg_parser.add_argument('--target', type=str, default='complex')

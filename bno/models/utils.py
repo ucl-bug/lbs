@@ -79,10 +79,12 @@ def unpad(
 class CProject(nn.Module):
   in_channels: int = 32
   out_channels: int = 32
-  activation: Callable = nn.gelu
+  activation: Callable = lambda x: jnp.exp(-(x**2))
 
   @nn.compact
   def __call__(self, x):
+    x = nn.Dense(self.in_channels)(x)
+    x = self.activation(x)
     x = nn.Dense(self.in_channels)(x)
     x = self.activation(x)
     x = CDense(self.out_channels)(x)
