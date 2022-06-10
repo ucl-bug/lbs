@@ -55,33 +55,46 @@ def log_with_intermediates(wandb, step, sos, field, pred_field, intermediates):
   fig, ax = plt.subplots(num_figures, 9, figsize=(24, num_figures*3))
   for i in range(len(fields)):
     maxval = np.amax(jnp.abs(fields[i])).item()
-    ax[i, 0].imshow(fields[i].real, vmin=-maxval/2, vmax=maxval/2, cmap="seismic")
-    ax[i, 0].set_title("Field (real)")
-    ax[i, 1].imshow(fields[i].imag, vmin=-maxval/2, vmax=maxval/2, cmap="seismic")
-    ax[i, 1].set_title("Field (imag)")
+    ax[i, 0].imshow(fields[i].real, vmin=-.5, vmax=.5, cmap="RdBu_r")
+    ax[i, 1].imshow(fields[i].imag, vmin=-.5, vmax=.5, cmap="RdBu_r")
+
+    if i == 0:
+      ax[i, 0].set_title("Field (real)")
+      ax[i, 1].set_title("Field (imag)")
+      ax[i, 2].set_title("M1 (real)")
+      ax[i, 3].set_title("M1 (imag)")
+      ax[i, 4].set_title("M2 (real)")
+      ax[i, 5].set_title("M2 (imag)")
+      ax[i, 6].set_title("M3 (real)")
+      ax[i, 7].set_title("M3 (imag)")
+      ax[i, 8].set_title("Update magnitude (& next field)")
+
+    # Turn off all axes
+    ax[i, 0].axis('off')
+    ax[i, 1].axis('off')
+    ax[i, 2].axis('off')
+    ax[i, 3].axis('off')
+    ax[i, 4].axis('off')
+    ax[i, 5].axis('off')
+    ax[i, 6].axis('off')
+    ax[i, 7].axis('off')
+    ax[i, 8].axis('off')
 
     if i < len(M1):
       maxval = np.amax(jnp.abs(M1[i])).item()
-      ax[i, 2].imshow(M1[i].real, vmin=-maxval, vmax=maxval, cmap="seismic")
-      ax[i, 2].set_title("M1 (real)")
-      ax[i, 3].imshow(M1[i].imag, vmin=-maxval, vmax=maxval, cmap="seismic")
-      ax[i, 3].set_title("M1 (imag)")
+      ax[i, 2].imshow(M1[i].real, vmin=-maxval, vmax=maxval, cmap="RdBu_r")
+      ax[i, 3].imshow(M1[i].imag, vmin=-maxval, vmax=maxval, cmap="RdBu_r")
 
       maxval = np.amax(jnp.abs(M2[i])).item()
-      ax[i, 4].imshow(M2[i].real, vmin=-maxval, vmax=maxval, cmap="seismic")
-      ax[i, 4].set_title("M2 (real)")
-      ax[i, 5].imshow(M2[i].imag, vmin=-maxval, vmax=maxval, cmap="seismic")
-      ax[i, 5].set_title("M2 (imag)")
+      ax[i, 4].imshow(M2[i].real, vmin=-maxval, vmax=maxval, cmap="RdBu_r")
+      ax[i, 5].imshow(M2[i].imag, vmin=-maxval, vmax=maxval, cmap="RdBu_r")
 
       maxval = np.amax(jnp.abs(src[i])).item()
-      ax[i, 6].imshow(src[i].real, vmin=-maxval, vmax=maxval, cmap="seismic")
-      ax[i, 6].set_title("Src (real)")
-      ax[i, 7].imshow(src[i].imag, vmin=-maxval, vmax=maxval, cmap="seismic")
-      ax[i, 7].set_title("Src (imag)")
+      ax[i, 6].imshow(src[i].real, vmin=-maxval, vmax=maxval, cmap="RdBu_r")
+      ax[i, 7].imshow(src[i].imag, vmin=-maxval, vmax=maxval, cmap="RdBu_r")
 
     maxval = np.amax(jnp.abs(updates[i])).item()
     ax[i, 8].imshow(jnp.abs(updates[i]), vmin=-0, vmax=maxval, cmap="inferno")
-    ax[i, 8].set_title("Update magnitude (& next field)")
 
   img = wandb.Image(plt)
   wandb.log({"intermediates": img}, step=step)
@@ -175,7 +188,7 @@ def main(args):
 
   optimizer = optax.chain(
     optax.adaptive_grad_clip(1.0),
-    optax.adamw(learning_rate=args.lr),
+    optax.adam(learning_rate=args.lr),
   )
   opt_state = optimizer.init(model_params)
 
