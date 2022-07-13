@@ -8,4 +8,3 @@ pytest
 flax
 optax
 git+https://github.com/astanziola/fourier-neural-operator-flax.git # FNO in flax
-neptune-client

@@ -33,7 +33,7 @@ def log_wandb_image(wandb, name, step, sos, field, pred_field):
   ax[1].imshow(field.real, vmin=-.5, vmax=.5, cmap="RdBu_r")
   ax[1].set_title("Field")
 
-  ax[2].imshow(pred_field.real, vmin=-.5, vmax=.5, cmap="RdBu_r")
+  ax[2].imshow(pred_field.real, vmin=-5, vmax=5, cmap="RdBu_r")
   ax[2].set_title("Predicted field")
 
   #plt.show()
@@ -141,7 +141,11 @@ def main(args):
 
   # Making dataloaders
   trainloader = DataLoader(
-    trainset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn
+    trainset,
+    batch_size=args.batch_size,
+    shuffle=True,
+    collate_fn=collate_fn,
+    drop_last=True
   )
   validloader = DataLoader(
     valset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn,
@@ -180,15 +184,30 @@ def main(args):
   model_params = model.init(
     RNG, _sos, _pml, _src, unrolls=args.stages
   )
+
+  # Test model
+  print("Testing model...")
+  output = model.apply(model_params,_sos, _pml, _src, unrolls=args.stages)
+  print("Output shape:", output.shape)
+  print("Output type:", output.dtype)
+
   del _sos
   del _pml
   del _src
 
   # Initialize optimizer
+  schedule = optax.cosine_onecycle_schedule(
+    100000,
+    args.lr,
+    pct_start=0.3,
+    div_factor=25.0,
+    final_div_factor=100.0
+  )
+  schedule = args.lr
 
   optimizer = optax.chain(
     optax.adaptive_grad_clip(1.0),
-    optax.adam(learning_rate=args.lr),
+    optax.adamw(learning_rate=schedule),
   )
   opt_state = optimizer.init(model_params)
 
@@ -199,7 +218,8 @@ def main(args):
     pred_field = model.apply(model_params, sound_speed, pml, src, unrolls)
 
     # Compute loss
-    lossval = jnp.mean(jnp.abs(pred_field - field)**2)
+    lossval = jnp.mean(jnp.abs(pred_field - 10*field)**2)
+    #lossval = jnp.mean(jnp.amax(jnp.abs(pred_field - field), axis=(1,2)))
     return lossval
 
   @partial(jit, static_argnums=4)
@@ -274,6 +294,17 @@ def main(args):
         step += 1
 
     # Log training image
+
+    if epoch % 5 == 0:
+      sos = jnp.expand_dims(batch["sound_speed"][0], axis=0)
+      pml = jnp.expand_dims(batch["pml"][0], axis=0)
+      src = jnp.expand_dims(batch["source"][0], axis=0)
+      field = batch["field"][0]
+      pred_field = predict(model_params, sos, pml, src, unrolls)[0]
+      sos = sos[0]
+      log_wandb_image(wandb, "training", step, sos, field, pred_field)
+
+    '''
     if epoch % 5 == 0:
       sos = jnp.expand_dims(batch["sound_speed"][0], axis=0)
       pml = jnp.expand_dims(batch["pml"][0], axis=0)
@@ -287,7 +318,7 @@ def main(args):
       log_with_intermediates(
         wandb, step, sos, field, pred_field, intermediates)
       log_wandb_image(wandb, "training", step, sos, field, pred_field)
-
+    '''
     # Validation
     avg_loss = 0
     val_steps = 0
@@ -324,12 +355,12 @@ if __name__ == '__main__':
   # Parse arguments
   arg_parser = argparse.ArgumentParser()
   arg_parser.add_argument('--max_sos', type=float, default=2.0)
-  arg_parser.add_argument('--model', type=str, default='ubs')
+  arg_parser.add_argument('--model', type=str, default='bno')
   arg_parser.add_argument('--batch_size', type=int, default=16)
   arg_parser.add_argument('--epochs', type=int, default=1000)
-  arg_parser.add_argument('--lr', type=float, default=1e-3)
+  arg_parser.add_argument('--lr', type=float, default=1e-4)
   arg_parser.add_argument('--stages', type=int, default=6)
-  arg_parser.add_argument('--channels', type=int, default=32)
+  arg_parser.add_argument('--channels', type=int, default=4)
   arg_parser.add_argument('--target', type=str, default='complex')
 
   args = arg_parser.parse_args()

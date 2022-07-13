@@ -43,7 +43,7 @@ install_dev:
 jaxgpu:              ## Installs jax for *nix systems with CUDA
 	@echo "Installing jax..."
 	@$(ENV_PREFIX)pip install --upgrade pip
-	@$(ENV_PREFIX)pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_releases.html
+	@$(ENV_PREFIX)pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
 
 .PHONY: virtualenv

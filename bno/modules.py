@@ -110,7 +110,7 @@ class WrappedBNO(nn.Module):
   dtype: jnp.dtype = jnp.complex64
 
   @nn.compact
-  def __call__(self, sos, pml, src):
+  def __call__(self, sos, pml, src, unrolls):
     # Two channels if complex
     if self.dtype == jnp.complex64:
       out_channels = 2
@@ -121,11 +121,11 @@ class WrappedBNO(nn.Module):
     y = BNO(
       depth=self.stages,
       width=self.channels,
-      out_channels=out_channels,
+      iterations=4,
       padding=self.padding,
-      modes1=32,
-      modes2=32,
-    )(sos, pml, src)
+      channels_last_proj=2*self.channels,
+      out_channels=out_channels,
+    )(sos, src)
 
     if self.dtype == jnp.complex64:
       return jnp.expand_dims(y[...,0] + 1j*y[...,1], -1)

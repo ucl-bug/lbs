@@ -134,7 +134,7 @@ class BornStage(nn.Module):
   def __call__(self, k_sq, u_new, src, grid):
     # Concat real field to inputs
     full_in = jnp.concatenate(
-      [k_sq, u_new.real, u_new.imag, src.real, src.imag, grid],
+      [k_sq, src.real, src.imag, grid],
       axis=-1
     )
 
@@ -153,7 +153,7 @@ class BornStage(nn.Module):
 
     # Concat real field to inputs
     full_in = jnp.concatenate(
-      [k_sq, u_new.real, u_new.imag, src.real, src.imag, grid],
+      [k_sq, src.real, src.imag, grid],
       axis=-1
     )
 
@@ -189,7 +189,7 @@ class TunableGreens(nn.Module):
       _params = jnp.zeros(list(u.shape[1:3]) + [1,]) + 0j
       field = FourierSeries(_params, Domain(u.shape[1:3], (1,1)))
       freq_grid = field._freq_grid
-      p_sq = self.amplitude*jnp.sum(freq_grid**2, -1)
+      p_sq = amplitude*jnp.sum(freq_grid**2, -1)
 
       # Apply green's function
       g_fourier = jnp.expand_dims(1. / (p_sq - k0 - 1j), 0)
