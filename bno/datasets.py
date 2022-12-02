@@ -15,7 +15,7 @@ class MNISTHelmholtz(Dataset):
         pml_size: int = 32,
         sound_speed_lims: Tuple[float] = [1.0, 1.3],
         omega: float = 1.0,
-        num_samples: int = 100,
+        num_samples: int = 10000,
         regenerate: bool = False,
         dtype: jnp.dtype = jnp.float32,
     ):
@@ -176,14 +176,17 @@ class MNISTHelmholtz(Dataset):
 
         # Local function to get the source field
         def random_src_on_background(sound_speed):
+            """
             good_sample = False
             while not good_sample:
                 pos = np.random.randint(
                     self.pml_size + 1, sound_speed.shape[0] - self.pml_size - 1, 2
                 )
-                if sound_speed[pos[0], pos[1]] <= self.sound_speed_lims[1] + 1e-5:
+                if sound_speed[pos[0], pos[1]] <= self.sound_speed_lims[0] + 1e-5:
                     good_sample = True
             print(f"Source at {pos}")
+            """
+            pos = [32, 32]
             # Get source field
             N = tuple([self.image_size + 2 * self.pml_size] * 2)
             dx = (1.0, 1.0)
