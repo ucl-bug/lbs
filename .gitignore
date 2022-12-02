@@ -8,6 +8,7 @@ data/*.npz
 data/**/*.gz
 data/**/*ubyte
 data/*.png
+ckpts/*
 
 # Logging
 wandb
