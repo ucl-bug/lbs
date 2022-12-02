@@ -1,10 +1,8 @@
-from functools import partial
-
 import fire
-import flax.linen as nn
 import numpy as np
 import optax
 from addict import Dict
+from flax.training import checkpoints
 from jax import jit
 from jax import numpy as jnp
 from jax import random, value_and_grad
@@ -15,7 +13,13 @@ from tqdm import tqdm
 
 import wandb
 from bno.datasets import MNISTHelmholtz, collate_fn
-from bno.modules import WrappedFNO
+from bno.modules import (
+    WrappedBNO,
+    WrappedBNOS,
+    WrappedCBNO,
+    WrappedFNO,
+    WrappedLBS,
+)
 
 RNG = random.PRNGKey(0)
 
@@ -110,7 +114,13 @@ def parse_args(args):
 
     # Check arguments
     assert args.max_sos > 1.0, "max_sos must be greater than 1.0"
-    assert args.model in ["fno", "bno", "cbno", "ubs"], "model must be 'fno'"
+    assert args.model in [
+        "fno",
+        "bno",
+        "lbs",
+        "cbno",
+        "bno_series",
+    ], "model must be 'fno'"
     assert args.batch_size > 0, "batch_size must be greater than 0"
     assert args.stages > 0, "stages must be greater than 0"
     assert args.channels > 0, "channels must be greater than 0"
@@ -135,17 +145,18 @@ def make_datasets(args):
         pml_size=16,
         sound_speed_lims=[1.0, args.max_sos],
         omega=1.0,
-        num_samples=50,
+        num_samples=2000,
         regenerate=False,
         dtype=args.target,
     )
 
     # Splitting dataset
     train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
+    val_size = int(0.8 * len(dataset))
+    test_size = len(dataset) - train_size - val_size
 
-    trainset, valset = random_split(
-        dataset, [train_size, val_size], generator=Generator().manual_seed(0)
+    trainset, valset, testset = random_split(
+        dataset, [train_size, val_size, test_size], generator=Generator().manual_seed(0)
     )
 
     # Making dataloaders
@@ -201,17 +212,33 @@ def main(
         model = WrappedFNO(
             stages=args.stages, channels=args.channels, dtype=args.target
         )
+    elif args.model == "bno":
+        model = WrappedBNO(
+            stages=args.stages, channels=args.channels, dtype=args.target
+        )
+    elif args.model == "lbs":
+        model = WrappedLBS(
+            stages=args.stages, channels=args.channels, dtype=args.target
+        )
+    elif args.model == "cbno":
+        model = WrappedCBNO(
+            stages=args.stages, channels=args.channels, dtype=args.target
+        )
+    elif args.model == "bno_series":
+        model = WrappedBNOS(
+            stages=args.stages, channels=args.channels, dtype=args.target
+        )
     else:
         raise NotImplementedError(f"Model {args.model} not implemented")
 
     _sos = jnp.ones((1, image_size, image_size, 1))
     _pml = jnp.ones((1, image_size, image_size, 4))
     _src = jnp.ones((1, image_size, image_size, 1))
-    model_params = model.init(RNG, _sos, _pml, _src, unrolls=args.stages)
+    model_params = model.init(RNG, _sos, _pml, _src)
 
     # Test model
     print("Testing model...")
-    output = model.apply(model_params, _sos, _pml, _src, unrolls=args.stages)
+    output = model.apply(model_params, _sos, _pml, _src)
     print("Output shape:", output.shape)
     print("Output type:", output.dtype)
 
@@ -238,29 +265,38 @@ def main(
     opt_state = optimizer.init(model_params)
 
     # Define loss
-    @partial(jit, static_argnums=5)
-    def loss(model_params, sound_speed, field, pml, src, unrolls):
+    @jit
+    def loss(
+        model_params,
+        sound_speed,
+        field,
+        pml,
+        src,
+    ):
         # Predict fields
-        pred_field = model.apply(model_params, sound_speed, pml, src, unrolls)
+        pred_field = model.apply(
+            model_params,
+            sound_speed,
+            pml,
+            src,
+        )
 
         # Compute loss
         lossval = jnp.mean(jnp.abs(pred_field - 10 * field) ** 2)
         # lossval = jnp.mean(jnp.amax(jnp.abs(pred_field - field), axis=(1,2)))
         return lossval
 
-    @partial(jit, static_argnums=4)
-    def predict(model_params, sound_speed, pml, src, unrolls):
-        return model.apply(model_params, sound_speed, pml, src, unrolls)
+    @jit
+    def predict(
+        model_params,
+        sound_speed,
+        pml,
+        src,
+    ):
+        return model.apply(model_params, sound_speed, pml, src)
 
-    @partial(jit, static_argnums=4)
-    def predict_with_intermediate(model_params, sound_speed, pml, src, unrolls):
-        def _fun(model):
-            return model.apply_with_intermediate(sound_speed, pml, src, unrolls)
-
-        return nn.apply(_fun, model)(model_params)
-
-    @partial(jit, static_argnums=3)
-    def update(opt_state, params, batch, unrolls):
+    @jit
+    def update(opt_state, params, batch):
         # Get loss and gradients
         lossval, gradients = value_and_grad(loss)(
             params,
@@ -268,7 +304,6 @@ def main(
             batch["field"],
             batch["pml"],
             batch["source"],
-            unrolls,
         )
 
         updates, opt_state = optimizer.update(gradients, opt_state, params)
@@ -279,12 +314,13 @@ def main(
     print("Training...")
     wandb.init("bno")
     wandb.config.update(args)
+    run_name = wandb.run.name
 
     # Training loop
     step = 0
+    old_v_loss = 1e100
     for epoch in range(args.epochs):
-        unrolls = args.stages  # 1 + int(epoch / 30)
-        print(f"Epoch {epoch}, unrolls {unrolls}")
+        print(f"Epoch {epoch}")
 
         with tqdm(trainloader, unit="batch") as tepoch:
             for batch in tepoch:
@@ -292,7 +328,9 @@ def main(
 
                 # Update parameters
                 model_params, opt_state, lossval = update(
-                    opt_state, model_params, batch, unrolls
+                    opt_state,
+                    model_params,
+                    batch,
                 )
 
                 # Log to wandb
@@ -305,12 +343,17 @@ def main(
                 step += 1
 
         # Log training image
-        if epoch % 5 == 0:
+        if True:  # epoch % 5 == 0:
             sos = jnp.expand_dims(batch["sound_speed"][0], axis=0)
             pml = jnp.expand_dims(batch["pml"][0], axis=0)
             src = jnp.expand_dims(batch["source"][0], axis=0)
             field = batch["field"][0]
-            pred_field = predict(model_params, sos, pml, src, unrolls)[0]
+            pred_field = predict(
+                model_params,
+                sos,
+                pml,
+                src,
+            )[0]
             sos = sos[0]
             log_wandb_image(wandb, "training", step, sos, field, pred_field)
 
@@ -327,23 +370,36 @@ def main(
                     batch["field"],
                     batch["pml"],
                     batch["source"],
-                    unrolls,
                 )
                 avg_loss += lossval * len(batch["sound_speed"])
                 tval.set_postfix(loss=lossval)
                 val_steps += len(batch["sound_speed"])
 
-        wandb.log({"val_loss": avg_loss / val_steps}, step=step)
+        v_loss = avg_loss / val_steps
+        wandb.log({"val_loss": v_loss}, step=step)
 
         # Log validation image
-        if epoch % 5 == 0:
+        if True:  # epoch % 5 == 0:
             sos = jnp.expand_dims(batch["sound_speed"][0], axis=0)
             pml = jnp.expand_dims(batch["pml"][0], axis=0)
             src = jnp.expand_dims(batch["source"][0], axis=0)
             field = batch["field"][0]
-            pred_field = predict(model_params, sos, pml, src, unrolls)[0]
+            pred_field = predict(
+                model_params,
+                sos,
+                pml,
+                src,
+            )[0]
             sos = sos[0]
             log_wandb_image(wandb, "validation", step, sos, field, pred_field)
+
+        # If the validation loss is lower, save
+        if v_loss < old_v_loss:
+            old_v_loss = v_loss
+            print("Saving checkpoint")
+            checkpoints.save_checkpoint(
+                ckpt_dir=f"ckpts/{run_name}", target=opt_state, step=step
+            )
 
 
 if __name__ == "__main__":
