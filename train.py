@@ -182,7 +182,7 @@ def main(
     channels=32,
     epochs=1000,
     last_projection_channels=128,
-    lr=1e-3,
+    lr=3e-3,
     max_sos=2.0,
     model="fno",
     stages=6,
