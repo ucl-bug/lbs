@@ -33,7 +33,7 @@ def get_grid(x, center=False):
     return batched_grid
 
 
-class BNO(nn.Module):
+class BNOS(nn.Module):
     width: int = 4
     depth: int = 4
     iterations: int = 1
@@ -45,7 +45,7 @@ class BNO(nn.Module):
     @nn.compact
     def __call__(self, sos, pml, src) -> jnp.ndarray:
         # Concatenate inputs
-        k = jnp.concatenate([sos, src, pml], axis=-1)
+        k = jnp.concatenate([sos, pml, src], axis=-1)
 
         # Pad input
         if self.padding > 0:
@@ -137,7 +137,7 @@ class Greens(nn.Module):
         spectrum_filter = spectrum_filter_real + 1j * spectrum_filter_imag
 
         # Normalize to unit norm for gaussians
-        spectrum_filter = spectrum_filter / spectrum_filter.shape[3] ** 2
+        spectrum_filter = spectrum_filter / spectrum_filter.shape[3]
 
         u = jnp.fft.rfftn(u, axes=(1, 2))
         print(u.shape, spectrum_filter.shape)

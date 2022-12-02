@@ -37,15 +37,15 @@ class BNO(nn.Module):
     width: int = 4
     depth: int = 4
     iterations: int = 1
-    channels_last_proj: int = 16
+    channels_last_proj: int = 128
     activation: Callable = nn.gelu
     out_channels: int = 1
     padding: int = 0
 
     @nn.compact
-    def __call__(self, sos, pml, src) -> jnp.ndarray:
+    def __call__(self, sos, src) -> jnp.ndarray:
         # Concatenate inputs
-        k = jnp.concatenate([sos, src, pml], axis=-1)
+        k = jnp.concatenate([sos, src], axis=-1)
 
         # Pad input
         if self.padding > 0:
@@ -137,7 +137,7 @@ class Greens(nn.Module):
         spectrum_filter = spectrum_filter_real + 1j * spectrum_filter_imag
 
         # Normalize to unit norm for gaussians
-        spectrum_filter = spectrum_filter / spectrum_filter.shape[3] ** 2
+        spectrum_filter = spectrum_filter / spectrum_filter.shape[3]
 
         u = jnp.fft.rfftn(u, axes=(1, 2))
         print(u.shape, spectrum_filter.shape)

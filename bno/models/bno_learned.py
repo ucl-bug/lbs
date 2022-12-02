@@ -2,7 +2,6 @@ from typing import Callable
 
 import flax.linen as nn
 import numpy as np
-from flax.linen.initializers import normal
 from jax import numpy as jnp
 
 
@@ -33,7 +32,7 @@ def get_grid(x, center=False):
     return batched_grid
 
 
-class BNO(nn.Module):
+class LBS(nn.Module):
     width: int = 4
     depth: int = 4
     iterations: int = 1
@@ -52,8 +51,7 @@ class BNO(nn.Module):
             k = jnp.pad(
                 k,
                 ((0, 0), (0, self.padding), (0, self.padding), (0, 0)),
-                mode="constant",
-                constant_values=0,
+                mode="edge",
             )
 
         # Generate coordinate grid, and append to input channels
@@ -85,32 +83,26 @@ class BornSeries(nn.Module):
         in_channels = u.shape[-1]
         gamma = Project(2 * in_channels, in_channels**2)(k)
         delta = Project(2 * in_channels, in_channels**2)(k)
+        epsilon = Project(2 * in_channels, in_channels**2)(k)
+        eta = Project(2 * in_channels, in_channels**2)(k)
+
+        source = Project(2 * in_channels, in_channels)(k)
+
         greens = Greens()
+        free_greens = Greens()
 
         # normalize
         gamma = gamma / gamma.shape[3]
         delta = delta / delta.shape[3]
+        epsilon = epsilon / epsilon.shape[3]
+        eta = eta / eta.shape[3]
 
-        # source = u
+        source = apply_matrix(free_greens(source), epsilon)
+        new_field = apply_matrix(greens(apply_matrix(u, delta)), gamma) + apply_matrix(
+            source, eta
+        )
 
-        for iter in range(self.iterations):
-            local_term = 2 * u - apply_matrix(u, gamma)
-
-            delta_u = apply_matrix(u, delta)
-            greens_u = apply_matrix(greens(delta_u), gamma)
-
-            u = local_term + greens_u  # + source
-
-            # u = 2u - gamma*u + gamma*G*delta*u
-
-        # Add bias term
-        bias = self.param("bias", normal(1.0, jnp.float32), (u.shape[-1],), jnp.float32)
-
-        u = u + bias
-
-        # Use nonlinearity
-        u = self.activation(u)
-        return u
+        return new_field + source
 
 
 def apply_matrix(x, matrix):

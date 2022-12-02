@@ -2,6 +2,10 @@ import flax.linen as nn
 from fno import FNO2D
 from jax import numpy as jnp
 
+from .models.bno import BNO
+from .models.bno_learned import LBS
+from .models.bno_series import BNOS
+from .models.cbno import CBNO
 from .models.fno import FNO2D
 
 
@@ -47,3 +51,111 @@ class WrappedFNO(NeuralOperatorWrapper):
             return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
         else:
             return y
+
+
+class WrappedBNO(nn.Module):
+    stages: int = 4
+    channels: int = 8
+    dtype: jnp.dtype = jnp.complex64
+
+    @nn.compact
+    def __call__(self, sos, pml, src):
+        # Two channels if complex
+        if self.dtype == jnp.complex64:
+            out_channels = 2
+        else:
+            out_channels = 2
+
+        # Concate inputs
+        y = BNO(
+            depth=self.stages,
+            width=self.channels,
+            out_channels=out_channels,
+            padding=32,
+        )(sos, pml, src)
+
+        if self.dtype == jnp.complex64:
+            return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
+        else:
+            return jnp.expand_dims(jnp.sqrt(y[..., 0] ** 2 + y[..., 1] ** 2), -1)
+
+
+class WrappedLBS(nn.Module):
+    stages: int = 4
+    channels: int = 8
+    dtype: jnp.dtype = jnp.complex64
+
+    @nn.compact
+    def __call__(self, sos, pml, src):
+        # Two channels if complex
+        if self.dtype == jnp.complex64:
+            out_channels = 2
+        else:
+            out_channels = 2
+
+        # Concate inputs
+        y = LBS(
+            depth=self.stages,
+            width=self.channels,
+            out_channels=out_channels,
+            padding=32,
+        )(sos, pml, src)
+
+        if self.dtype == jnp.complex64:
+            return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
+        else:
+            return jnp.expand_dims(jnp.sqrt(y[..., 0] ** 2 + y[..., 1] ** 2), -1)
+
+
+class WrappedCBNO(nn.Module):
+    stages: int = 4
+    channels: int = 8
+    dtype: jnp.dtype = jnp.complex64
+
+    @nn.compact
+    def __call__(self, sos, pml, src):
+        # Two channels if complex
+        if self.dtype == jnp.complex64:
+            out_channels = 2
+        else:
+            out_channels = 2
+
+        # Concate inputs
+        y = CBNO(
+            depth=self.stages,
+            width=self.channels,
+            out_channels=out_channels,
+            padding=32,
+        )(sos, pml, src)
+
+        if self.dtype == jnp.complex64:
+            return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
+        else:
+            return jnp.expand_dims(jnp.sqrt(y[..., 0] ** 2 + y[..., 1] ** 2), -1)
+
+
+class WrappedBNOS(nn.Module):
+    stages: int = 4
+    channels: int = 8
+    dtype: jnp.dtype = jnp.complex64
+
+    @nn.compact
+    def __call__(self, sos, pml, src):
+        # Two channels if complex
+        if self.dtype == jnp.complex64:
+            out_channels = 2
+        else:
+            out_channels = 2
+
+        # Concate inputs
+        y = BNOS(
+            depth=self.stages,
+            width=self.channels,
+            out_channels=out_channels,
+            padding=32,
+        )(sos, pml, src)
+
+        if self.dtype == jnp.complex64:
+            return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
+        else:
+            return jnp.expand_dims(jnp.sqrt(y[..., 0] ** 2 + y[..., 1] ** 2), -1)
