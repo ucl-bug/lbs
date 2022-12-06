@@ -15,13 +15,7 @@ from tqdm import tqdm
 
 import wandb
 from bno.datasets import MNISTHelmholtz, collate_fn
-from bno.modules import (
-    WrappedBNO,
-    WrappedBNOS,
-    WrappedCBNO,
-    WrappedFNO,
-    WrappedLBS,
-)
+from bno.modules import WrappedBNO, WrappedFNO
 
 RNG = random.PRNGKey(0)
 
@@ -191,6 +185,7 @@ def main(
     model="fno",
     stages=6,
     target="complex",
+    loss_fun: str = "l2",
 ):
 
     # Collect arguments into addict.Dict
@@ -206,6 +201,7 @@ def main(
         "target": target,
         "use_nonlinearity": use_nonlinearity,
         "use_grid": use_grid,
+        "loss_fun": loss_fun,
     }
     args = parse_args(args)
 
@@ -226,18 +222,6 @@ def main(
             last_proj=args.last_projection_channels,
             use_nonlinearity=args.use_nonlinearity,
             use_grid=args.use_grid,
-        )
-    elif args.model == "lbs":
-        model = WrappedLBS(
-            stages=args.stages, channels=args.channels, dtype=args.target
-        )
-    elif args.model == "cbno":
-        model = WrappedCBNO(
-            stages=args.stages, channels=args.channels, dtype=args.target
-        )
-    elif args.model == "bno_series":
-        model = WrappedBNOS(
-            stages=args.stages, channels=args.channels, dtype=args.target
         )
     else:
         raise NotImplementedError(f"Model {args.model} not implemented")
@@ -293,7 +277,14 @@ def main(
         )
 
         # Compute loss
-        lossval = jnp.mean(jnp.abs(pred_field - 10 * field) ** 2)  # TODO: Remove 10
+        if args.loss_fun == "l2":
+            lossval = jnp.mean(jnp.abs(pred_field - 10 * field) ** 2)  # TODO: Remove 10
+        elif args.loss_fun == "linf":
+            lossval = jnp.mean(jnp.amax(jnp.abs(pred_field - 10 * field), axis=(1, 2)))
+        elif args.loss_fun == "l1":
+            lossval = jnp.mean(jnp.abs(pred_field - 10 * field))
+        else:
+            raise NotImplementedError(f"Loss {args.loss_fun} not implemented")
         # lossval = jnp.mean(jnp.amax(jnp.abs(pred_field - field), axis=(1,2)))
         return lossval
 

@@ -1,18 +1,21 @@
-# Born Neural Operator
+# Learned Born Series
 
-**A Fourier Neural Operator based on the Born approximation**
+This repository contains the code for the paper
 
----
+> [A Learned Born Series for Highly-Scattering Media]()
 
-## Steps
+This work presents a method for solving the Helmholtz differential equation using a deep learning approach. We propose a modification to the existing convolutional Born series method to reduce the number of iterations required to solve the equation in highly-scattering media. This is achieved by transforming the linear operator into a non-linear one using a deep learning model. The method is tested on simulated examples, showing improved convergence compared to the original convolutional Born series method.
 
-### Install
-Run `make virtualenv` and then `source .venv/bin/activate` to activate the virtual environment.
+This repository can also be installed as a Python package using `pip`, to provide an implementation of the method in the [Flax neural network library](https://github.com/google/flax), as well as a Flax implementation of the Convergent Born Series by [Osnabrugge et al., 2016](https://www.sciencedirect.com/science/article/pii/S0021999116302595).
 
-### Generate datasets
-Run `make generate_datasets` to generate the datasets.
+<br/>
 
-## References
+## Installation
 
-- [Fourier Neural Operator](https://arxiv.org/abs/2010.08895)
-- [A convergent Born series for solving the inhomogeneous Helmholtz equation in arbitrarily large media](https://www.sciencedirect.com/science/article/pii/S0021999116302595)
+To install the package, clone the repository and run
+
+```bash
+pip install -e .
+```
+
+This will install the package in editable mode, so that any changes to the code will be reflected in the installed package.

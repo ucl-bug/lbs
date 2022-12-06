@@ -1,13 +1,2 @@
-jwave
-jupyterlab
-matplotlib
-torchvision
-tqdm
-pre-commit
-pytest
+jwave @ git+https://github.com/ucl-bug/jwave.git#egg=jwave
 flax
-optax
-git+https://github.com/astanziola/fourier-neural-operator-flax.git # FNO in flax
-fire
-addict
-wandb

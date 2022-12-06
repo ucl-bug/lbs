@@ -2,97 +2,10 @@ from typing import Callable
 
 import flax.linen as nn
 from jax import numpy as jnp
-from jax import random
 from jaxdf import FourierSeries
 from jaxdf.geometry import Domain
 
 from .utils import constant
-
-
-def normal(stddev=1e-2, dtype=jnp.float32) -> Callable:
-    def init(key, shape, dtype=dtype):
-        keys = random.split(key)
-        return random.normal(keys[0], shape) * stddev
-
-    return init
-
-
-class SpectralConv2d(nn.Module):
-    out_channels: int = 32
-    modes1: int = 12
-    modes2: int = 12
-
-    @nn.compact
-    def __call__(self, x):
-        # x.shape: [batch, height, width, in_channels]
-
-        # Initialize parameters
-        in_channels = x.shape[-1]
-        scale = 1 / (in_channels * self.out_channels)
-        in_channels = x.shape[-1]
-        height = x.shape[1]
-        width = x.shape[2]
-
-        # Checking that the modes are not more than the input size
-        assert self.modes1 <= height // 2 + 1
-        assert self.modes2 <= width // 2 + 1
-        assert height % 2 == 0  # Only tested for even-sized inputs
-        assert width % 2 == 0  # Only tested for even-sized inputs
-
-        # The model assumes real inputs and therefore uses a real
-        # fft. For a 2D signal, the conjugate symmetry of the
-        # transform is exploited to reduce the number of operations.
-        # Given an input signal of dimesions (N, C, H, W), the
-        # output signal will have dimensions (N, C, H, W//2+1).
-        # Therefore the kernel weigths will have different dimensions
-        # for the two axis.
-        kernel_1_r = self.param(
-            "kernel_1_r",
-            normal(scale, jnp.float32),
-            (in_channels, self.out_channels, self.modes1, self.modes2),
-            jnp.float32,
-        )
-        kernel_1_i = self.param(
-            "kernel_1_i",
-            normal(scale, jnp.float32),
-            (in_channels, self.out_channels, self.modes1, self.modes2),
-            jnp.float32,
-        )
-        kernel_2_r = self.param(
-            "kernel_2_r",
-            normal(scale, jnp.float32),
-            (in_channels, self.out_channels, self.modes1, self.modes2),
-            jnp.float32,
-        )
-        kernel_2_i = self.param(
-            "kernel_2_i",
-            normal(scale, jnp.float32),
-            (in_channels, self.out_channels, self.modes1, self.modes2),
-            jnp.float32,
-        )
-
-        # Perform fft of the input
-        x_ft = jnp.fft.rfftn(x, axes=(1, 2))
-
-        # Multiply the center of the spectrum by the kernel
-        out_ft = jnp.zeros_like(x_ft)
-        s1 = jnp.einsum(
-            "bijc,coij->bijo",
-            x_ft[:, : self.modes1, : self.modes2, :],
-            kernel_1_r + 1j * kernel_1_i,
-        )
-        s2 = jnp.einsum(
-            "bijc,coij->bijo",
-            x_ft[:, -self.modes1 :, : self.modes2, :],
-            kernel_2_r + 1j * kernel_2_i,
-        )
-        out_ft = out_ft.at[:, : self.modes1, : self.modes2, :].set(s1)
-        out_ft = out_ft.at[:, -self.modes1 :, : self.modes2, :].set(s2)
-
-        # Go back to the spatial domain
-        y = jnp.fft.irfftn(out_ft, axes=(1, 2))
-
-        return y
 
 
 class TunableGreens(nn.Module):

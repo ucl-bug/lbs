@@ -9,10 +9,7 @@ data/**/*.gz
 data/**/*ubyte
 data/*.png
 ckpts/*
+results/*
 
 # Logging
 wandb
-.neptune
-
-# Private
-secrets.json
