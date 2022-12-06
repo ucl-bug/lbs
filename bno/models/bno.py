@@ -166,9 +166,8 @@ def D(x, W):
 
 class FourierStage(nn.Module):
     out_channels: int = 32
-    modes1: int = 12
-    modes2: int = 12
     activation: Callable = nn.gelu
+    use_nonlinearity: bool = True
 
     @nn.compact
     def __call__(self, x, context):
@@ -217,8 +216,12 @@ class FourierStage(nn.Module):
         x_fourier = D(G(D(x, gamma2)), gamma1)
         x_local = D(x, gamma3)
         out = x_fourier + x_local
-        out = nn.Dense(out.shape[-1])(out)
-        out = self.activation(out)
+
+        # Apply nonlinearity
+        if self.use_nonlinearity:
+            out = nn.Dense(out.shape[-1])(out)
+            out = self.activation(out)
+
         out = nn.Dense(out.shape[-1])(out)
         return out
 
@@ -240,14 +243,14 @@ class BNO(nn.Module):
       activation: Activation function to use
       out_channels: Number of output channels, >1 for non-scalar fields.
     """
-    modes1: int = 12
-    modes2: int = 12
     width: int = 32
     depth: int = 4
     channels_last_proj: int = 128
     activation: Callable = nn.gelu
     out_channels: int = 1
     padding: int = 0  # Padding for non-periodic inputs
+    use_nonlinearity: bool = True
+    use_grid: bool = True
 
     @nn.compact
     def __call__(self, sos, pml, src) -> jnp.ndarray:
@@ -263,8 +266,11 @@ class BNO(nn.Module):
             )
 
         # Generate coordinate grid, and append to input channels
-        grid = self.get_grid(src)
-        context = jnp.concatenate([sos, grid], axis=-1)
+        if self.use_grid:
+            grid = self.get_grid(src)
+            context = jnp.concatenate([sos, grid], axis=-1)
+        else:
+            context = sos
 
         # Lift the input to a higher dimension
         x = nn.Dense(self.width)(src) * 0.0
@@ -276,9 +282,8 @@ class BNO(nn.Module):
             activation = self.activation if depthnum < self.depth - 1 else lambda x: x
             x_new = nn.remat(FourierStage)(
                 out_channels=self.width,
-                modes1=self.modes1,
-                modes2=self.modes2,
                 activation=activation,
+                use_nonlinearity=self.use_nonlinearity,
             )(x_new, context)
             x = x_new + x
 

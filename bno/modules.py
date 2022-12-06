@@ -1,11 +1,11 @@
 import flax.linen as nn
 from fno import FNO2D
 from jax import numpy as jnp
+from jwave import FourierSeries
+from jwave.acoustics.time_harmonic import born_series
+from jwave.geometry import Domain, Medium
 
 from .models.bno import BNO
-from .models.bno_learned import LBS
-from .models.bno_series import BNOS
-from .models.cbno import CBNO
 from .models.fno import FNO2D
 
 
@@ -57,6 +57,9 @@ class WrappedBNO(nn.Module):
     stages: int = 4
     channels: int = 8
     dtype: jnp.dtype = jnp.complex64
+    last_proj: int = 128
+    use_nonlinearity: bool = True
+    use_grid: bool = True
 
     @nn.compact
     def __call__(self, sos, pml, src):
@@ -71,91 +74,46 @@ class WrappedBNO(nn.Module):
             depth=self.stages,
             width=self.channels,
             out_channels=out_channels,
+            channels_last_proj=self.last_proj,
             padding=32,
+            use_nonlinearity=self.use_nonlinearity,
+            use_grid=self.use_grid,
         )(sos, pml, src)
 
-        if self.dtype == jnp.complex64:
+        if True:  # self.dtype == jnp.complex64:
             return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
         else:
             return jnp.expand_dims(jnp.sqrt(y[..., 0] ** 2 + y[..., 1] ** 2), -1)
 
 
-class WrappedLBS(nn.Module):
-    stages: int = 4
-    channels: int = 8
-    dtype: jnp.dtype = jnp.complex64
+class WrappedCBS(nn.Module):
+    stages: int = 12
 
     @nn.compact
     def __call__(self, sos, pml, src):
-        # Two channels if complex
-        if self.dtype == jnp.complex64:
-            out_channels = 2
-        else:
-            out_channels = 2
+        # Strip batch dimension and channel dimension
+        sos = sos[0, ..., 0]
+        src = src[0, ..., 0]
 
-        # Concate inputs
-        y = LBS(
-            depth=self.stages,
-            width=self.channels,
-            out_channels=out_channels,
-            padding=32,
-        )(sos, pml, src)
+        # Setup domain
+        image_size = sos.shape[1]
+        N = tuple([image_size] * 2)
+        dx = (1.0, 1.0)
+        domain = Domain(N, dx)
 
-        if self.dtype == jnp.complex64:
-            return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
-        else:
-            return jnp.expand_dims(jnp.sqrt(y[..., 0] ** 2 + y[..., 1] ** 2), -1)
+        # Define fields
+        sound_speed = FourierSeries(sos, domain)
+        src = FourierSeries(src, domain)
 
+        # Make model
+        medium = Medium(domain, sound_speed)
 
-class WrappedCBNO(nn.Module):
-    stages: int = 4
-    channels: int = 8
-    dtype: jnp.dtype = jnp.complex64
+        # Predict
+        predicted = born_series(
+            medium, src, max_iter=self.stages, k0=0.79056941504209483299972338610818
+        ).on_grid
 
-    @nn.compact
-    def __call__(self, sos, pml, src):
-        # Two channels if complex
-        if self.dtype == jnp.complex64:
-            out_channels = 2
-        else:
-            out_channels = 2
+        # Expand dims
+        predicted = jnp.expand_dims(predicted, 0)
 
-        # Concate inputs
-        y = CBNO(
-            depth=self.stages,
-            width=self.channels,
-            out_channels=out_channels,
-            padding=32,
-        )(sos, pml, src)
-
-        if self.dtype == jnp.complex64:
-            return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
-        else:
-            return jnp.expand_dims(jnp.sqrt(y[..., 0] ** 2 + y[..., 1] ** 2), -1)
-
-
-class WrappedBNOS(nn.Module):
-    stages: int = 4
-    channels: int = 8
-    dtype: jnp.dtype = jnp.complex64
-
-    @nn.compact
-    def __call__(self, sos, pml, src):
-        # Two channels if complex
-        if self.dtype == jnp.complex64:
-            out_channels = 2
-        else:
-            out_channels = 2
-
-        # Concate inputs
-        y = BNOS(
-            depth=self.stages,
-            width=self.channels,
-            out_channels=out_channels,
-            padding=32,
-        )(sos, pml, src)
-
-        if self.dtype == jnp.complex64:
-            return jnp.expand_dims(y[..., 0] + 1j * y[..., 1], -1)
-        else:
-            return jnp.expand_dims(jnp.sqrt(y[..., 0] ** 2 + y[..., 1] ** 2), -1)
+        return predicted

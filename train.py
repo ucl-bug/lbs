@@ -1,8 +1,10 @@
+import os
+
 import fire
 import numpy as np
 import optax
 from addict import Dict
-from flax.training import checkpoints
+from flax import serialization
 from jax import jit
 from jax import numpy as jnp
 from jax import random, value_and_grad
@@ -152,7 +154,7 @@ def make_datasets(args):
 
     # Splitting dataset
     train_size = int(0.8 * len(dataset))
-    val_size = int(0.8 * len(dataset))
+    val_size = int(0.1 * len(dataset))
     test_size = len(dataset) - train_size - val_size
 
     trainset, valset, testset = random_split(
@@ -182,6 +184,8 @@ def main(
     channels=32,
     epochs=1000,
     last_projection_channels=128,
+    use_nonlinearity=True,
+    use_grid=True,
     lr=3e-3,
     max_sos=2.0,
     model="fno",
@@ -200,6 +204,8 @@ def main(
         "model": model,
         "stages": stages,
         "target": target,
+        "use_nonlinearity": use_nonlinearity,
+        "use_grid": use_grid,
     }
     args = parse_args(args)
 
@@ -214,7 +220,12 @@ def main(
         )
     elif args.model == "bno":
         model = WrappedBNO(
-            stages=args.stages, channels=args.channels, dtype=args.target
+            stages=args.stages,
+            channels=args.channels,
+            dtype=args.target,
+            last_proj=args.last_projection_channels,
+            use_nonlinearity=args.use_nonlinearity,
+            use_grid=args.use_grid,
         )
     elif args.model == "lbs":
         model = WrappedLBS(
@@ -282,7 +293,7 @@ def main(
         )
 
         # Compute loss
-        lossval = jnp.mean(jnp.abs(pred_field - 10 * field) ** 2)
+        lossval = jnp.mean(jnp.abs(pred_field - 10 * field) ** 2)  # TODO: Remove 10
         # lossval = jnp.mean(jnp.amax(jnp.abs(pred_field - field), axis=(1,2)))
         return lossval
 
@@ -397,9 +408,17 @@ def main(
         if v_loss < old_v_loss:
             old_v_loss = v_loss
             print("Saving checkpoint")
-            checkpoints.save_checkpoint(
-                ckpt_dir=f"ckpts/{run_name}", target=opt_state, step=step
-            )
+
+            # Serialize parameters
+            params = serialization.to_bytes(model_params)
+
+            # Make directory if it doesn't exist
+            if not os.path.exists(f"ckpts/{run_name}"):
+                os.makedirs(f"ckpts/{run_name}")
+
+            # Save parameters
+            with open(f"ckpts/{run_name}/params.pkl", "wb") as f:
+                f.write(params)
 
 
 if __name__ == "__main__":
