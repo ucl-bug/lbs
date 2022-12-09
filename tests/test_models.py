@@ -14,5 +14,6 @@ def test_fno():
     # Test forward pass
     output = FNO().apply(variables, inputs)
 
+
 if __name__ == "__main__":
     test_fno()

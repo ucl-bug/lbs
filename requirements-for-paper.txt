@@ -1,0 +1,11 @@
+jwave @ git+https://github.com/ucl-bug/jwave.git#egg=jwave
+torchvision
+tqdm
+pre-commit
+pytest
+flax
+optax
+git+https://github.com/astanziola/fourier-neural-operator-flax.git # FNO in flax
+fire
+addict
+wandb

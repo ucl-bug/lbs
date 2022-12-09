@@ -1,7 +1,5 @@
 from typing import Callable
 
-from flax import linen as nn
-from jax import lax
 from jax import numpy as jnp
 from jax import random
 
@@ -79,57 +77,6 @@ def unpad(
         return x[:, :-pad_width, :-pad_width, :]
     elif mode == "symmetric":
         return x[:, pad_width:-pad_width, pad_width:-pad_width, :]
-
-
-class CProject(nn.Module):
-    in_channels: int = 32
-    out_channels: int = 32
-    activation: Callable = lambda x: jnp.exp(-(x**2))
-
-    @nn.compact
-    def __call__(self, x):
-        x = nn.Dense(self.in_channels)(x)
-        x = self.activation(x)
-        x = nn.Dense(self.in_channels)(x)
-        x = self.activation(x)
-        x = CDense(self.out_channels)(x)
-        return x
-
-
-def c_gelu(x):
-    return nn.gelu(x.real) + 1j * nn.gelu(x.imag)
-
-
-class CDense(nn.Module):
-    features: int
-    use_bias: bool = True
-    dtype: jnp.dtype = jnp.complex64
-
-    @nn.compact
-    def __call__(self, inputs):
-        inputs = jnp.asarray(inputs, self.dtype)
-        kernel_r = self.param(
-            "kernel_r",
-            normal(stddev=1e-2, dtype=jnp.float32),
-            (inputs.shape[-1], self.features),
-        )
-        kernel_i = self.param(
-            "kernel_i",
-            normal(stddev=1e-2, dtype=jnp.float32),
-            (inputs.shape[-1], self.features),
-        )
-        kernel = kernel_r + 1j * kernel_i
-        y = lax.dot_general(inputs, kernel, (((inputs.ndim - 1,), (0,)), ((), ())))
-        if self.use_bias:
-            bias_r = self.param(
-                "bias_r", normal(stddev=1e-2, dtype=jnp.float32), (self.features,)
-            )
-            bias_i = self.param(
-                "bias_i", normal(stddev=1e-2, dtype=jnp.float32), (self.features,)
-            )
-            bias = bias_r + 1j * bias_i
-            y += jnp.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
-        return y
 
 
 def get_grid(x):
