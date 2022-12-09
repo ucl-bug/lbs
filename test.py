@@ -218,9 +218,11 @@ TRAIN_IDS = {
     "born_series_48": "born_series_48",
     "born_series_96": "born_series_96",
     "born_series_192": "born_series_192",
+    "born_series_1000": "born_series_1000",
 }
 
 if __name__ == "__main__":
+    # import fire
     # fire.Fire(main)
 
     # Test all models
