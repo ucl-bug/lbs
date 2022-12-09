@@ -15,7 +15,45 @@ This repository can also be installed as a Python package using `pip`, to provid
 To install the package, clone the repository and run
 
 ```bash
+pip install -r requirements.txt
 pip install -e .
 ```
 
-This will install the package in editable mode, so that any changes to the code will be reflected in the installed package.
+This will install the package in editable mode, so that any changes to the code will be reflected in the installed package. From here, you have a `Flax` model of the `bno`. Anywhere you can write
+
+```python
+from bno import BNO, WrappedBNO
+```
+
+and use it as a model/layer in your code. The `WrappedBNO` is made specifically for acoustic simulations, and takes care of transforming the output into a complex field.
+
+## Train
+
+To train the network, run
+
+```bash
+python train.py --model bno
+```
+
+Training takes about 3/4 days to complete on a single GPU, but you get good results already after a few hours.
+There are several other arguments that can be passed to the script, which can be found by running
+
+```bash
+python train.py --help
+```
+
+## Test
+
+To test a network, modify the `TRAIN_IDS` variable with your run. The key is an arbitrary string, say `my_model`, while the value needs to be the run ID of the `wandb` run. Then run
+
+```bash
+python test.py --train_id my_model
+```
+
+To generate the figures from the paper, run
+
+```bash
+python make_figures --figure example --model my_model
+```
+
+where `--figure` can be one of `example`, `iterations_error`, `show_iterations`, `show_pareto`, and `--model`.

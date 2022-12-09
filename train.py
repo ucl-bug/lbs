@@ -182,7 +182,7 @@ def main(
     use_grid=True,
     lr=3e-3,
     max_sos=2.0,
-    model="fno",
+    model="bno",
     stages=6,
     target="complex",
     loss_fun: str = "l2",

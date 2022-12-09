@@ -222,11 +222,12 @@ TRAIN_IDS = {
 }
 
 if __name__ == "__main__":
-    # import fire
-    # fire.Fire(main)
+    import fire
+
+    fire.Fire(main)
 
     # Test all models
-    for key, value in TRAIN_IDS.items():
-        if "born_series" not in key:
-            print(f"Testing {key} model...")
-            main(value)
+    # for key, value in TRAIN_IDS.items():
+    #    if "born_series" not in key:
+    #        print(f"Testing {key} model...")
+    #        main(value)
