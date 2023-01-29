@@ -2,7 +2,7 @@
 
 This repository contains the code for the paper
 
-> [A Learned Born Series for Highly-Scattering Media]()
+> [A Learned Born Series for Highly-Scattering Media](https://arxiv.org/abs/2212.04948)
 
 This work presents a method for solving the Helmholtz differential equation using a deep learning approach. We propose a modification to the existing convolutional Born series method to reduce the number of iterations required to solve the equation in highly-scattering media. This is achieved by transforming the linear operator into a non-linear one using a deep learning model. The method is tested on simulated examples, showing improved convergence compared to the original convolutional Born series method.
 
@@ -57,3 +57,19 @@ python make_figures --figure example --model my_model
 ```
 
 where `--figure` can be one of `example`, `iterations_error`, `show_iterations`, `show_pareto`, and `--model`.
+
+
+## Citation
+
+[![arXiv](https://img.shields.io/badge/arXiv-2207.01499-b31b1b.svg?style=flat)](https://arxiv.org/abs/2207.01499)
+
+If you use this repository in your research, please consider citing it as:
+
+```bibtex
+@article{stanziola2022learned,
+  title={A Learned Born Series for Highly-Scattering Media},
+  author={Stanziola, Antonio and Arridge, Simon and Cox, Ben T and Treeby, Bradley E},
+  journal={arXiv preprint arXiv:2212.04948},
+  year={2022}
+}
+```
